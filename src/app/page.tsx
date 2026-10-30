@@ -16,17 +16,41 @@ export default function HomePage() {
   // Fetch initial content
   const loadContent = async () => {
     try {
-      const res = await fetch('/api/content', { cache: 'no-store' });
+      const res = await fetch(`/api/content?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
-      setContent(data);
+      if (data && !data.error) {
+        setContent(data);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('romantic_content_cache', JSON.stringify(data));
+        }
+      }
     } catch (err) {
-      console.error('Failed to load content:', err);
+      console.error('Failed to load content from server:', err);
+      // Fallback to local cache if server is temporarily unreachable
+      if (typeof window !== 'undefined') {
+        const cached = localStorage.getItem('romantic_content_cache');
+        if (cached) {
+          try {
+            setContent(JSON.parse(cached));
+          } catch {}
+        }
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
+    // Immediate prefill from cache to avoid flicker
+    if (typeof window !== 'undefined') {
+      const cached = localStorage.getItem('romantic_content_cache');
+      if (cached) {
+        try {
+          setContent(JSON.parse(cached));
+          setIsLoading(false);
+        } catch {}
+      }
+    }
     loadContent();
   }, []);
 
@@ -151,7 +175,12 @@ export default function HomePage() {
         isOpen={isAdminOpen}
         onClose={() => setIsAdminOpen(false)}
         content={content}
-        onContentUpdated={(newContent) => setContent(newContent)}
+        onContentUpdated={(newContent) => {
+          setContent(newContent);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('romantic_content_cache', JSON.stringify(newContent));
+          }
+        }}
       />
     </main>
   );

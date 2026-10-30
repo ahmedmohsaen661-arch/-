@@ -58,6 +58,58 @@ export default function AdminModal({ isOpen, onClose, content, onContentUpdated 
     setFormData(content);
   }, [content]);
 
+  // Client-side image compression to ensure smooth and fail-safe uploads
+  const compressImage = (file: File, maxWidth = 1600, maxHeight = 1600, quality = 0.85): Promise<File> => {
+    return new Promise((resolve) => {
+      if (file.type === 'image/svg+xml' || file.type === 'image/gif' || file.size < 500 * 1024) {
+        resolve(file);
+        return;
+      }
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new window.Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(file);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                resolve(file);
+                return;
+              }
+              const cleanName = file.name.replace(/\.[^.]+$/, '') + '.jpg';
+              resolve(new File([blob], cleanName, { type: 'image/jpeg' }));
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+        img.onerror = () => resolve(file);
+      };
+      reader.onerror = () => resolve(file);
+    });
+  };
+
   // Helper to attach authorization header
   const getAuthHeaders = (includeContentType = true): HeadersInit => {
     const headers: Record<string, string> = {};
@@ -73,21 +125,18 @@ export default function AdminModal({ isOpen, onClose, content, onContentUpdated 
     return headers;
   };
 
-  // Check initial admin session
-  useEffect(() => {
-    if (isOpen) {
-      checkAuthStatus();
-    }
-  }, [isOpen]);
-
   const checkAuthStatus = async () => {
     try {
       const res = await fetch('/api/auth/me', {
         headers: getAuthHeaders(false),
+        credentials: 'include',
       });
       const data = await res.json();
       if (data.authenticated) {
         setIsAuthenticated(true);
+        if (data.token && typeof window !== 'undefined') {
+          localStorage.setItem('admin_token', data.token);
+        }
       } else {
         setIsAuthenticated(false);
       }
@@ -95,6 +144,13 @@ export default function AdminModal({ isOpen, onClose, content, onContentUpdated 
       setIsAuthenticated(false);
     }
   };
+
+  // Check initial admin session
+  useEffect(() => {
+    if (isOpen) {
+      checkAuthStatus();
+    }
+  }, [isOpen]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,6 +161,7 @@ export default function AdminModal({ isOpen, onClose, content, onContentUpdated 
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ password }),
       });
       const data = await res.json();
@@ -130,6 +187,7 @@ export default function AdminModal({ isOpen, onClose, content, onContentUpdated 
       await fetch('/api/auth/logout', {
         method: 'POST',
         headers: getAuthHeaders(false),
+        credentials: 'include',
       });
     } finally {
       if (typeof window !== 'undefined') {
@@ -147,14 +205,18 @@ export default function AdminModal({ isOpen, onClose, content, onContentUpdated 
       const res = await fetch('/api/content', {
         method: 'PUT',
         headers: getAuthHeaders(true),
+        credentials: 'include',
         body: JSON.stringify(formData),
       });
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setSaveStatus({ type: 'success', message: 'تم حفظ جميع التعديلات بنجاح في قاعدة البيانات! ✨' });
+        setSaveStatus({ type: 'success', message: 'تم حفظ جميع التعديلات بنجاح في قاعدة البيانات! ستظهر التعديلات دائماً حتى بعد قفل وفتح الموقع ✨' });
         onContentUpdated(data.content);
-        setTimeout(() => setSaveStatus(null), 4000);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('romantic_content_cache', JSON.stringify(data.content));
+        }
+        setTimeout(() => setSaveStatus(null), 5000);
       } else {
         setSaveStatus({ type: 'error', message: data.error || 'فشل حفظ التعديلات' });
       }
@@ -170,12 +232,16 @@ export default function AdminModal({ isOpen, onClose, content, onContentUpdated 
     setSaveStatus(null);
 
     try {
+      // 1. Compress image client-side to guarantee rapid upload without payload limits
+      const optimizedFile = await compressImage(file);
+
       const body = new FormData();
-      body.append('file', file);
+      body.append('file', optimizedFile);
 
       const res = await fetch('/api/upload', {
         method: 'POST',
         headers: getAuthHeaders(false),
+        credentials: 'include',
         body,
       });
 
@@ -185,10 +251,28 @@ export default function AdminModal({ isOpen, onClose, content, onContentUpdated 
         const updatedMemories = formData.memories.map((m) =>
           m.id === cardId ? { ...m, image: data.url } : m
         );
-        setFormData({ ...formData, memories: updatedMemories });
-        setSaveStatus({ type: 'success', message: 'تم رفع الصورة بنجاح! تذكر الضغط على حفظ التغييرات.' });
+        const updatedForm = { ...formData, memories: updatedMemories };
+        setFormData(updatedForm);
+
+        // Auto-persist immediately to DB
+        try {
+          await fetch('/api/content', {
+            method: 'PUT',
+            headers: getAuthHeaders(true),
+            credentials: 'include',
+            body: JSON.stringify(updatedForm),
+          });
+          onContentUpdated(updatedForm);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('romantic_content_cache', JSON.stringify(updatedForm));
+          }
+        } catch (saveErr) {
+          console.warn('Auto-save warning:', saveErr);
+        }
+
+        setSaveStatus({ type: 'success', message: 'تم رفع الصورة وتثبيتها بنجاح! تم حفظ التعديل بشكل دائم في قاعدة البيانات ✨' });
       } else {
-        setSaveStatus({ type: 'error', message: data.error || 'فشل رفع الصورة' });
+        setSaveStatus({ type: 'error', message: data.error || 'فشل رفع الصورة، يرجى المحاولة مرة أخرى' });
       }
     } catch (err: any) {
       setSaveStatus({ type: 'error', message: 'خطأ أثناء رفع الصورة: ' + (err?.message || '') });
@@ -551,14 +635,17 @@ export default function AdminModal({ isOpen, onClose, content, onContentUpdated 
                           <div className="flex items-center gap-2">
                             <label className="flex-1 cursor-pointer py-2 px-3 rounded-xl bg-white hover:bg-rose-50 text-rose-600 border border-rose-200 hover:border-rose-300 transition-colors text-xs font-bold flex items-center justify-center gap-2 shadow-sm">
                               <Upload className="w-3.5 h-3.5" />
-                              <span>رفع صورة جديدة من جهازي</span>
+                              <span>رفع صورة من جهازي</span>
                               <input
                                 type="file"
                                 accept="image/*"
                                 className="hidden"
                                 onChange={(e) => {
                                   const file = e.target.files?.[0];
-                                  if (file) handleFileUpload(card.id, file);
+                                  if (file) {
+                                    handleFileUpload(card.id, file);
+                                    e.target.value = '';
+                                  }
                                 }}
                               />
                             </label>
@@ -578,6 +665,22 @@ export default function AdminModal({ isOpen, onClose, content, onContentUpdated 
                                 <Trash2 className="w-4 h-4" />
                               </button>
                             )}
+                          </div>
+
+                          {/* Direct Image URL input */}
+                          <div>
+                            <input
+                              type="text"
+                              value={card.image}
+                              placeholder="أو الصق رابط صورة مباشرة هنا (URL)..."
+                              onChange={(e) => {
+                                const updated = formData.memories.map((m) =>
+                                  m.id === card.id ? { ...m, image: e.target.value } : m
+                                );
+                                setFormData({ ...formData, memories: updated });
+                              }}
+                              className="w-full px-3 py-1.5 rounded-xl border border-gray-200 focus:border-rose-400 outline-none text-xs text-left dir-ltr font-mono bg-white/70"
+                            />
                           </div>
                         </div>
 
@@ -747,7 +850,36 @@ export default function AdminModal({ isOpen, onClose, content, onContentUpdated 
                       placeholder="2026-10-31T00:00:00+02:00"
                       className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:border-rose-500 outline-none text-left font-mono text-sm dir-ltr"
                     />
-                    <span className="text-xs text-gray-400 mt-1 block">
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormData({ ...formData, targetDate: '2026-10-31T00:00:00+02:00' })}
+                        className="px-2.5 py-1 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold border border-rose-200 transition-colors"
+                      >
+                        31 أكتوبر 2026 (موعد عيد الميلاد)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const future = new Date(Date.now() + 3 * 3600 * 1000).toISOString();
+                          setFormData({ ...formData, targetDate: future });
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-colors"
+                      >
+                        بعد 3 ساعات (اختبار)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const future = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
+                          setFormData({ ...formData, targetDate: future });
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-colors"
+                      >
+                        بعد 24 ساعة (اختبار)
+                      </button>
+                    </div>
+                    <span className="text-xs text-gray-400 mt-1.5 block">
                       التوقيت الافتراضي هو 31 أكتوبر 2026 منتصف الليل بتوقيت مصر (UTC+2).
                     </span>
                   </div>

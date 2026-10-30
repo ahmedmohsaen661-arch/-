@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
-import { isUserAdmin } from '@/lib/auth';
+import { checkAdminAuth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const authenticated = isUserAdmin(request);
-  return NextResponse.json({ authenticated });
+  const auth = checkAdminAuth(request);
+  return NextResponse.json({
+    authenticated: auth.valid,
+    token: auth.token || null,
+  });
 }

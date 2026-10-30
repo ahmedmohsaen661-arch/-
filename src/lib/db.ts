@@ -82,53 +82,59 @@ function getDefaultData(): StoredData {
 }
 
 // Helper to get safe writable file path (handles local dev, VPS, and serverless read-only environments)
-function getSafeStoragePath(): string | null {
-  // Check local data directory first
+function getSafeStoragePath(): string {
   try {
     const localDir = path.join(process.cwd(), 'data');
     if (!fs.existsSync(localDir)) {
       fs.mkdirSync(localDir, { recursive: true });
     }
-    const testPath = path.join(localDir, '.write-test');
-    fs.writeFileSync(testPath, '1');
-    fs.unlinkSync(testPath);
     return path.join(localDir, 'romantic_store.json');
   } catch {
-    // Read-only filesystem (e.g. Vercel / Netlify serverless)
-  }
-
-  // Fallback to /tmp
-  try {
     const tmpDir = path.join(os.tmpdir(), 'romantic-data');
     if (!fs.existsSync(tmpDir)) {
       fs.mkdirSync(tmpDir, { recursive: true });
     }
     return path.join(tmpDir, 'romantic_store.json');
-  } catch (err) {
-    console.warn('Failed to access tmp storage directory:', err);
-    return null;
   }
 }
 
 function readLocalStorage(): StoredData {
+  // 1. Primary: read from project data directory
+  try {
+    const primaryPath = path.join(process.cwd(), 'data', 'romantic_store.json');
+    if (fs.existsSync(primaryPath)) {
+      const raw = fs.readFileSync(primaryPath, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.content && parsed.passwordHash) {
+        inMemoryStore = parsed;
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('Error reading primary local JSON store:', err);
+  }
+
+  // 2. Secondary backup: read from OS tmp directory
+  try {
+    const backupPath = path.join(os.tmpdir(), 'romantic-data', 'romantic_store.json');
+    if (fs.existsSync(backupPath)) {
+      const raw = fs.readFileSync(backupPath, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.content && parsed.passwordHash) {
+        inMemoryStore = parsed;
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('Error reading backup JSON store:', err);
+  }
+
+  // 3. Fallback to in-memory store if available
   if (inMemoryStore) {
     return inMemoryStore;
   }
 
-  const filePath = getSafeStoragePath();
-  if (filePath && fs.existsSync(filePath)) {
-    try {
-      const raw = fs.readFileSync(filePath, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (parsed && parsed.content && parsed.passwordHash) {
-        inMemoryStore = parsed;
-        return inMemoryStore!;
-      }
-    } catch (err) {
-      console.warn('Error reading local JSON store:', err);
-    }
-  }
-
+  // 4. Fallback to default initial data and initialize file
   inMemoryStore = getDefaultData();
   writeLocalStorage(inMemoryStore);
   return inMemoryStore;
@@ -136,13 +142,30 @@ function readLocalStorage(): StoredData {
 
 function writeLocalStorage(data: StoredData): void {
   inMemoryStore = data;
-  const filePath = getSafeStoragePath();
-  if (filePath) {
-    try {
-      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-    } catch (err) {
-      console.warn('Could not persist to disk, stored in memory:', err);
+  const jsonStr = JSON.stringify(data, null, 2);
+
+  // 1. Write to project data directory
+  try {
+    const localDir = path.join(process.cwd(), 'data');
+    if (!fs.existsSync(localDir)) {
+      fs.mkdirSync(localDir, { recursive: true });
     }
+    const primaryPath = path.join(localDir, 'romantic_store.json');
+    fs.writeFileSync(primaryPath, jsonStr, 'utf-8');
+  } catch (err) {
+    console.warn('Could not persist to primary disk:', err);
+  }
+
+  // 2. Write to OS tmp backup directory
+  try {
+    const tmpDir = path.join(os.tmpdir(), 'romantic-data');
+    if (!fs.existsSync(tmpDir)) {
+      fs.mkdirSync(tmpDir, { recursive: true });
+    }
+    const backupPath = path.join(tmpDir, 'romantic_store.json');
+    fs.writeFileSync(backupPath, jsonStr, 'utf-8');
+  } catch {
+    // Ignore tmp backup errors
   }
 }
 
@@ -235,8 +258,9 @@ export async function updateSiteContent(content: Partial<SiteContent>): Promise<
   const updated: SiteContent = {
     ...current,
     ...content,
-    memories: content.memories || current.memories,
-    dalaaWords: content.dalaaWords || current.dalaaWords,
+    memories: content.memories !== undefined ? content.memories : current.memories,
+    dalaaWords: content.dalaaWords !== undefined ? content.dalaaWords : current.dalaaWords,
+    isUnlocked: content.isUnlocked !== undefined ? Boolean(content.isUnlocked) : current.isUnlocked,
   };
 
   // 1. Update in Supabase if configured

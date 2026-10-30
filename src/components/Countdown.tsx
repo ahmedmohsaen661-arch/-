@@ -30,26 +30,19 @@ export default function Countdown({ greeting, targetDateStr = '2026-10-31T00:00:
 
   const calculateCairoTimeLeft = (): TimeLeft => {
     try {
-      // Current time converted to Africa/Cairo
-      const nowCairoString = new Date().toLocaleString('en-US', { timeZone: 'Africa/Cairo' });
-      const nowCairo = new Date(nowCairoString);
-
-      // Target Cairo time: October 31, 2026 00:00:00
-      let targetCairo: Date;
+      let targetTimeMs: number;
       if (targetDateStr) {
-        // Parse date
         const parsed = new Date(targetDateStr);
         if (!isNaN(parsed.getTime())) {
-          const targetCairoString = parsed.toLocaleString('en-US', { timeZone: 'Africa/Cairo' });
-          targetCairo = new Date(targetCairoString);
+          targetTimeMs = parsed.getTime();
         } else {
-          targetCairo = new Date(2026, 9, 31, 0, 0, 0);
+          targetTimeMs = new Date('2026-10-31T00:00:00+02:00').getTime();
         }
       } else {
-        targetCairo = new Date(2026, 9, 31, 0, 0, 0);
+        targetTimeMs = new Date('2026-10-31T00:00:00+02:00').getTime();
       }
 
-      const diff = targetCairo.getTime() - nowCairo.getTime();
+      const diff = targetTimeMs - Date.now();
 
       if (diff <= 0) {
         return { days: 0, hours: 0, minutes: 0, seconds: 0, isFinished: true };

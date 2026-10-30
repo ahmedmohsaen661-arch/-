@@ -7,7 +7,13 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const content = await getSiteContent();
-    return NextResponse.json(content);
+    return NextResponse.json(content, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+      },
+    });
   } catch (error: any) {
     console.error('Error fetching site content:', error);
     return NextResponse.json({ error: 'Failed to fetch content' }, { status: 500 });

@@ -12,20 +12,46 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'غير مصرح لك برفع الصور' }, { status: 401 });
     }
 
-    const formData = await request.formData();
-    const file = formData.get('file') as File | null;
+    const contentType = request.headers.get('content-type') || '';
+    let buffer: Buffer;
+    let mimeType = 'image/jpeg';
+    let fileExt = 'jpg';
 
-    if (!file) {
-      return NextResponse.json({ error: 'لم يتم اختيار أي ملف' }, { status: 400 });
+    if (contentType.includes('application/json')) {
+      // JSON Base64 Payload
+      const json = await request.json();
+      const base64Str = json.image || json.dataUrl || json.imageBase64;
+      if (!base64Str) {
+        return NextResponse.json({ error: 'لم يتم إرسال بيانات الصورة' }, { status: 400 });
+      }
+
+      // Check if data URI
+      const matches = base64Str.match(/^data:([A-Za-z-+/]+);base64,(.+)$/);
+      if (matches) {
+        mimeType = matches[1];
+        fileExt = mimeType.split('/')[1] || 'jpg';
+        buffer = Buffer.from(matches[2], 'base64');
+      } else {
+        buffer = Buffer.from(base64Str, 'base64');
+      }
+    } else {
+      // Standard Multipart Form Data
+      const formData = await request.formData();
+      const file = formData.get('file') as File | null;
+
+      if (!file) {
+        return NextResponse.json({ error: 'لم يتم اختيار أي ملف' }, { status: 400 });
+      }
+
+      mimeType = file.type || 'image/jpeg';
+      if (!mimeType.startsWith('image/')) {
+        return NextResponse.json({ error: 'الملف المرفوع يجب أن يكون صورة' }, { status: 400 });
+      }
+
+      fileExt = path.extname(file.name).replace('.', '') || (mimeType.split('/')[1] || 'jpg');
+      const bytes = await file.arrayBuffer();
+      buffer = Buffer.from(bytes);
     }
-
-    // Verify it is an image
-    if (!file.type.startsWith('image/')) {
-      return NextResponse.json({ error: 'الملف المرفوع يجب أن يكون صورة' }, { status: 400 });
-    }
-
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
 
     // 1. Check if Supabase Storage is configured
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -34,13 +60,12 @@ export async function POST(request: Request) {
     if (supabaseUrl && supabaseKey) {
       try {
         const supabase = createClient(supabaseUrl, supabaseKey);
-        const fileExt = file.name.split('.').pop() || 'jpg';
         const fileName = `memory_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
 
         const { error: uploadError } = await supabase.storage
           .from('memories')
           .upload(fileName, buffer, {
-            contentType: file.type,
+            contentType: mimeType,
             upsert: true
           });
 
@@ -54,23 +79,20 @@ export async function POST(request: Request) {
             url: publicData.publicUrl,
             message: 'تم رفع الصورة بنجاح إلى التخزين السحابي'
           });
-        } else {
-          console.warn('Supabase storage upload failed:', uploadError.message);
         }
       } catch (err) {
         console.warn('Supabase storage client exception:', err);
       }
     }
 
-    // 2. Try Local uploads directory if writable
+    // 2. Try Local uploads directory
     try {
       const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
       if (!fs.existsSync(uploadsDir)) {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }
 
-      const fileExt = path.extname(file.name) || '.jpg';
-      const cleanFileName = `memory_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${fileExt}`;
+      const cleanFileName = `memory_${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
       const filePath = path.join(uploadsDir, cleanFileName);
 
       await fs.promises.writeFile(filePath, buffer);
@@ -82,16 +104,17 @@ export async function POST(request: Request) {
         url: publicUrl,
         message: 'تم حفظ الصورة بنجاح'
       });
-    } catch {
-      // Local directory is read-only (e.g. Vercel serverless without Supabase Storage)
-      // Convert to Base64 Data URI so it works 100% everywhere without requiring a disk
+    } catch (diskErr) {
+      console.warn('Local disk save failed, using base64 fallback:', diskErr);
+
+      // Fallback: Convert to Base64 Data URI so it works 100% everywhere without needing disk
       const base64Data = buffer.toString('base64');
-      const dataUri = `data:${file.type || 'image/jpeg'};base64,${base64Data}`;
+      const dataUri = `data:${mimeType};base64,${base64Data}`;
 
       return NextResponse.json({
         success: true,
         url: dataUri,
-        message: 'تم حفظ الصورة بنجاح (تخزين مباشر)'
+        message: 'تم حفظ الصورة بنجاح'
       });
     }
   } catch (error: any) {
