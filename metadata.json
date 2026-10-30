@@ -1,0 +1,7 @@
+{
+  "name": "Romantic Birthday Surprise",
+  "description": "موقع رومانسي خاص بمناسبة عيد ميلاد أجمل إنسانة في حياتي، يحكي قصة حبنا وذكرياتنا معاً مع عد تنازلي ولوحة تحكم وذكريات.",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

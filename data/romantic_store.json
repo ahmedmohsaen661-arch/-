@@ -1,0 +1,45 @@
+{
+  "content": {
+    "countdownGreeting": "كل ثانية بتقربني من أجمل وأرق بنوتة في الكون كله ❤️",
+    "celebrationTitle": "كل سنة وإنتي أجمل حاجة حصلتلي يا روحي ❤️",
+    "mainMessageTitle": "رسالة من حبيبك ونور عينك احمد  ❤️",
+    "mainMessage": "حبيبتي الغالية.. تم حفظ وتعديل هذا النص بنجاح تام وبدون أي أخطاء!",
+    "memoriesTitle": "ذكرياتنا سوا 📸❤️",
+    "memories": [
+      {
+        "id": 1,
+        "image": "https://images.unsplash.com/photo-1518199266791-5375a83190b7?auto=format&fit=crop&w=800&q=80",
+        "title": "أول نظرة بيننا.. بداية الحكاية 🌹",
+        "note": "اليوم اللي شفتك فيه لأول مرة حسيت إن كل حاجة في حياتي ابتدت تتغير للأجمل.. عيونك كانت وستظل أجمل مكان أهرب له من كل الدنيا."
+      },
+      {
+        "id": 2,
+        "image": "https://images.unsplash.com/photo-1522673607200-164d1b6ce486?auto=format&fit=crop&w=800&q=80",
+        "title": "ضحكتك اللي بتنوّر دنيتي ✨",
+        "note": "لما بتضحكي، الدنيا كلها بتنور في عيني.. ضحكتك دي بالنسبة لي حياة تانية وصوتك هو الأمان والسكينة لقلبي دايماً."
+      },
+      {
+        "id": 3,
+        "image": "https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?auto=format&fit=crop&w=800&q=80",
+        "title": "أيامنا وسوالفنا الحلوة 💌",
+        "note": "كل دقيقة بنتكلم فيها بتعدي كأنها ثانية واحدة من حلاوتها.. تفاصيل يومك وكلماتك هي أحلى حاجة بتصبرني على بعدك."
+      },
+      {
+        "id": 4,
+        "image": "https://images.unsplash.com/photo-1534447677768-be436bb09401?auto=format&fit=crop&w=800&q=80",
+        "title": "وعد العمر والأيام الجاية 💍❤️",
+        "note": "كل سنة وإنتي معايا وبجانبي، أوعدك أفضل أحبك وأسندك وأكون أمانك وضحكتك وسندك في كل خطوة في عمرنا وسنيننا الجاية كلها."
+      }
+    ],
+    "dalaaTitle": "دلع بنوتي 🥰",
+    "dalaaWords": [
+      "سُكرتي",
+      "روحي",
+      "أميرة قلبي"
+    ],
+    "isUnlocked": true,
+    "targetDate": "2026-10-31T00:00:00+02:00",
+    "musicUrl": "/audio/romantic-melody.mp3"
+  },
+  "passwordHash": "$2a$10$qAEVW25FhXDRKu6LFYnkrepOzFShkBdxsfVzNBdCSn9Vys/71em4W"
+}

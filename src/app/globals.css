@@ -1,0 +1,70 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-cairo: 'Cairo', sans-serif;
+  --font-amiri: 'Amiri', serif;
+}
+
+html {
+  scroll-behavior: smooth;
+  direction: rtl;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #fffaf7;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(254, 205, 211, 0.25) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(233, 213, 255, 0.25) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(254, 243, 199, 0.2) 0px, transparent 50%),
+    radial-gradient(at 0% 100%, rgba(255, 228, 230, 0.3) 0px, transparent 50%);
+  background-attachment: fixed;
+  color: #374151;
+  font-family: var(--font-cairo), system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom Romantic Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #fff5f5;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #f472b6;
+  border-radius: 9999px;
+  border: 2px solid #fff5f5;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #e11d48;
+}
+
+/* Selection Color */
+::selection {
+  background-color: #fecdd3;
+  color: #881337;
+}
+
+/* Smooth Fade In Animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
